@@ -48,7 +48,7 @@ struct MidiHandler{
                         m_pMidiIn->openPort(i);
                         m_pMidiIn->setCallback(&midiCallback, this);
                         // Ignore sysex, timing, and active sensing messages.
-                        m_pMidiIn->ignoreTypes( true, true, true);
+                        m_pMidiIn->ignoreTypes( false, false, false);
                         break;
                     }
                 }
@@ -63,22 +63,50 @@ struct MidiHandler{
         // https://www.midi.org/specifications-old/item/table-1-summary-of-midi-message
         unsigned char status = (message->at(0)>>4)&0x0F;
 
+		bool print = false;
+
         switch(status){
         case 0x0C:
             cout << "Received Program change message" << endl;
             if(message->size()>1){
                 midiinterface::MidiProgramChangeMessage msg;
+                msg.header.stamp = ros::Time::now();
                 msg.program = message->at(1);
                 m_programChangeMessagePub.publish(msg);
             }
-
+            print = true;
             break;
-        case 0x0D:
+        case 0x0F:
+			//cout << "SysEx message" << endl;
+			if(message->size() < 4) break;
+			if(message->at(1) == 0x7F && message->at(3) == 6)
+				cout << "MMC Command" << endl;
+			print = true;
+			break;
+        case 0x0B:
+        {
             cout << "Reveived Control Change message " << endl;
+            midiinterface::MidiControlMessage msg;
+            msg.header.stamp = ros::Time::now();
+            msg.channel = message->at(1);
+            msg.value = message->at(2);
+            m_controlMessagePub.publish(msg);
+            print = true;
+		}
             break;
+            
         default:
-            cout << "Unknown Midi header type " << (int) message->at(0) << endl;
+			break;
+            //cout << "Unknown Midi header type " << (int) message->at(0) << endl;
         }
+        
+        if(print)
+        {
+			for(size_t i = 0; i < message->size(); i++)
+				printf("0x%02x ", message->at(i));
+			printf("\n");
+		}
+			
     }
 
     ros::Publisher m_controlMessagePub;
@@ -175,6 +203,5 @@ cleanup:
 // Hackish way of confining data handling to MidiHandler
 void midiCallback( double timeStamp, std::vector<unsigned char> *message, void *userData){
     MidiHandler* pmh = (MidiHandler*) userData;
-    cout << "Midi event " << endl;
     pmh->HandleMidiData(timeStamp, message);
 }

@@ -1,6 +1,6 @@
 Header header
 uint8 channel
-uint8 cc
+uint8 value
 
 
 
